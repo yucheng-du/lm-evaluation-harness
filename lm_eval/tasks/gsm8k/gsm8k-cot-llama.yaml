@@ -50,6 +50,7 @@ filter_list:
   - function: take_first
   name: strict-match
 - filter:
+  - function: !function utils.NormalizeBracedThousands
   - function: regex
     group_select: -1
     regex_pattern: (-?[$0-9.,]{2,})|(-?[0-9]+)
@@ -82,4 +83,4 @@ repeats: 1
 task: gsm8k_cot_llama
 test_split: test
 metadata:
-  version: 4.0
+  version: 5.0

@@ -62,4 +62,5 @@ Homepage: https://github.com/openai/grade-school-math
 - [ ] Majority voting "without CoT"
 
 Change log:
+- [2026-10-15] `gsm8k`, `gsm8k_cot`, `gsm8k_cot_zeroshot` (v4.0), and `gsm8k_cot_llama` (v5.0): normalize complete braced thousands separators (for example, `10{,}000`) before flexible extraction. Repeated/mixed comma groups, signs, currency prefixes, and decimal suffixes retain the existing numeric extraction and scoring rules. Strict extraction, prompts, and metric normalization are unchanged. Flexible-extract scores can change for these formatted numbers; this does not add general LaTeX evaluation or change which numeric match is selected.
 - [2026-01-27] `gsm8k_cot_llama` (v4.0): set 'target_delimiter' to empty as the prompt ends with newline.
