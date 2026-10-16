@@ -1,0 +1,5 @@
+include: default.yaml
+task: drop_fixed
+doc_to_target: "{{ answers[0]|join(', ') }}"
+metadata:
+  version: 1.0

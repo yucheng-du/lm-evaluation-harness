@@ -37,7 +37,18 @@ https://github.com/allenai/allennlp-reading-comprehension/blob/master/allennlp_r
 
 #### Tasks
 
-* `drop`
+* `drop`: Historical implementation, retained for reproducibility.
+* `drop_fixed`: Uses the first complete processed answer for few-shot examples
+  and recorded targets, instead of rendering the raw answer dictionary's keys.
+  All spans in that answer are joined with `, `; alternative acceptable answers
+  remain separate groups for the existing EM/F1 scoring.
+
+`drop_fixed` addresses the target-rendering issue in [#2137](https://github.com/EleutherAI/lm-evaluation-harness/issues/2137).
+It inherits the data processing, prompt text, delimiters, scoring, and generation
+settings from `drop`, including its `.` stop sequence. It does not address decimal
+stopping or generated multi-span answer parsing, and does not claim to match a
+different published evaluation setup. Few-shot results should identify which
+variant was used; zero-shot prompt construction is unchanged.
 
 ### Checklist
 
