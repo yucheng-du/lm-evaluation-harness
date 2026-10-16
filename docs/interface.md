@@ -105,7 +105,7 @@ lm-eval run --config my_config.yaml --tasks mmlu
 | Argument | Description |
 |----------|-------------|
 | `--cache_requests` | Cache preprocessed prompts: `true`, `refresh`, or `delete`. Cached files stored in `lm_eval/cache/.cache` or path set by `LM_HARNESS_CACHE_PATH` env var. |
-| `--check_integrity` | Run task test suite validation before evaluation. |
+| `--check_integrity` | Run structural checks on the selected tasks before evaluation (requires `pytest`, available in `lm_eval[dev]`). Checks loaded data, configuration, and request construction on up to ten documents per task. |
 
 ### Prompt Formatting
 

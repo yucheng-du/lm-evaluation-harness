@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import math
-import pathlib
-import sys
+import os
+from contextlib import ExitStack
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from typing_extensions import TypedDict
@@ -18,6 +19,8 @@ from lm_eval.utils import positional_deprecated
 
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from lm_eval.api.group import Group
     from lm_eval.api.task import Task
     from lm_eval.tasks import TaskManager
@@ -55,43 +58,69 @@ def get_sample_size(task, limit: int | float | None) -> int | None:
 
 
 @positional_deprecated
-def find_test_root(start_path: pathlib.Path) -> pathlib.Path:
-    """
-    Search upward in the directory tree to a maximum of three layers
-    to find and return the package root (containing the 'tests' folder)
-    """
-    cur_path = start_path.resolve()
-    max_layers = 3
-    for _ in range(max_layers):
-        if (cur_path / "tests" / "test_version_stable.py").exists():
-            return cur_path
-        else:
-            cur_path = cur_path.parent.resolve()
-    raise FileNotFoundError(
-        f"Unable to find package root within {max_layers} upwards" + f"of {start_path}"
-    )
+def run_task_tests(
+    task_dict: Mapping[str, Task], *, request_kwargs: dict[str, Any] | None = None
+) -> None:
+    """Run shared structural checks on the resolved tasks being evaluated."""
+    if not task_dict:
+        raise ValueError("No resolved tasks were provided for integrity checking.")
+    try:
+        import pytest
+    except ImportError as exc:
+        raise ImportError(
+            "Task integrity checking requires pytest. Install it with "
+            "`pip install 'lm_eval[dev]'`."
+        ) from exc
 
+    class SelectedTasks:
+        def pytest_generate_tests(self, metafunc):
+            if "task_class" in metafunc.fixturenames:
+                metafunc.parametrize(
+                    "task_class", list(task_dict.values()), ids=list(task_dict)
+                )
+            if "request_kwargs" in metafunc.fixturenames:
+                metafunc.parametrize("request_kwargs", [request_kwargs or {}])
 
-@positional_deprecated
-def run_task_tests(task_list: list[str]):
-    """
-    Find the package root and run the tests for the given tasks
-    """
-    import pytest
-
-    package_root = find_test_root(start_path=pathlib.Path(__file__))
-    task_string = " or ".join(task_list)
-    args = [
-        f"{package_root}/tests/test_version_stable.py",
-        f"--rootdir={package_root}",
-        "-k",
-        f"{task_string}",
-    ]
-    sys.path.append(str(package_root))
-    pytest_return_val = pytest.main(args)
+    test_path = Path(__file__).with_name("_task_testing.py")
+    # The checks must not inherit a caller's -k/-m filters, conftest, or plugins:
+    # those can silently omit selected tasks or dispatch live objects to workers.
+    with pytest.MonkeyPatch.context() as env, ExitStack() as state:
+        env.setenv("PYTEST_ADDOPTS", "")
+        env.setenv("PYTEST_PLUGINS", "")
+        env.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
+        for task in task_dict.values():
+            # build_all_requests replaces instances and advances few-shot state.
+            # Preserve the standard task/sampler fields even when a check fails.
+            env.setattr(
+                task, "_instances", getattr(task, "_instances", None), raising=False
+            )
+            sampler = getattr(task, "sampler", None)
+            for rng in (
+                getattr(task, "fewshot_rnd", None),
+                getattr(sampler, "rnd", None),
+            ):
+                if rng is not None:
+                    state.callback(rng.setstate, rng.getstate())
+            if sampler is not None:
+                for attr in ("df", "_loaded"):
+                    state.callback(setattr, sampler, attr, getattr(sampler, attr))
+        pytest_return_val = pytest.main(
+            [
+                f"{test_path}::TestTaskIntegrity",
+                "-q",
+                "-c",
+                os.devnull,
+                f"--rootdir={test_path.parent}",
+                "--noconftest",
+                "--import-mode=importlib",
+                "-p",
+                "no:cacheprovider",
+            ],
+            plugins=[SelectedTasks()],
+        )
     if pytest_return_val:
         raise ValueError(
-            f"Not all tests for the specified tasks ({task_list}) ran successfully! Error code: {pytest_return_val}"
+            f"Not all tests for the specified tasks ({list(task_dict)}) ran successfully! Error code: {pytest_return_val}"
         )
 
 

@@ -667,7 +667,7 @@ If you have a Metal compatible Mac, you can run the eval harness using the MPS b
 >
 > This will write out one text file for each task.
 
-To verify the data integrity of the tasks you're performing in addition to running the tasks themselves, you can use the `--check_integrity` flag:
+To run structural checks on the tasks you're evaluating, use the `--check_integrity` flag. This requires `pytest` (available with `pip install 'lm_eval[dev]'`) and works with both source and package installations. It checks the selected tasks' loaded data and configuration, and prompt, target, and request construction on up to ten documents per task; it does not validate every document or verify dataset checksums. Groups and patterns use the same resolved tasks as the evaluation:
 
 ```bash
 lm_eval --model openai \

@@ -347,7 +347,20 @@ def simple_evaluate(
         task_obj.set_fewshot_seed(seed=fewshot_random_seed)
 
     if check_integrity:
-        run_task_tests(task_list=tasks)
+        run_task_tests(
+            task_dict=loaded["tasks"],
+            request_kwargs={
+                "system_instruction": system_instruction,
+                "apply_chat_template": bool(apply_chat_template),
+                "fewshot_as_multiturn": fewshot_as_multiturn,
+                "chat_template": getattr(lm, "apply_chat_template", None)
+                if apply_chat_template
+                else None,
+                "tokenizer_name": getattr(lm, "tokenizer_name", "")
+                if apply_chat_template
+                else "",
+            },
+        )
 
     if evaluation_tracker is not None:
         evaluation_tracker.general_config_tracker.log_experiment_args(
