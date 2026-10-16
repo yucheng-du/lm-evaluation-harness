@@ -2,6 +2,7 @@
 
 import builtins
 import json
+import random
 
 import pytest
 
@@ -421,3 +422,87 @@ def test_multiple_input_task_checks_construct_choice_contexts(task_dir):
     )
     assert len(model.requests) == 2
     assert {context for context, _ in model.requests} == {"alpha", "beta"}
+
+
+@pytest.fixture
+def random_formatter_config(tmp_path):
+    from lm_eval.tasks.med_prescriptions.utils import (
+        doc_to_choice_easy,
+        doc_to_target,
+        doc_to_text_easy,
+    )
+
+    data = tmp_path / "prescription.json"
+    data.write_text(
+        json.dumps([{"results": "{}", "gold": "fixture gold", "gold_position": 0}]),
+        encoding="utf-8",
+    )
+    return {
+        "task": "integrity_random_formatter",
+        "dataset_path": "json",
+        "dataset_kwargs": {
+            "data_files": {"test": str(data)},
+            "cache_dir": str(tmp_path / "cache"),
+        },
+        "test_split": "test",
+        "output_type": "multiple_choice",
+        "doc_to_text": doc_to_text_easy,
+        "doc_to_choice": doc_to_choice_easy,
+        "doc_to_target": doc_to_target,
+        "num_fewshot": 0,
+        "target_delimiter": " ",
+        "metric_list": [
+            {"metric": "acc", "aggregation": "mean", "higher_is_better": True}
+        ],
+    }
+
+
+@pytest.mark.parametrize("invalid", [False, True], ids=["success", "failure"])
+def test_python_random_state_is_restored(random_formatter_config, invalid):
+    original_state = random.getstate()
+    try:
+        if invalid:
+            formatter = random_formatter_config["doc_to_text"]
+
+            def invalid_formatter(doc):
+                return formatter(doc) + " "
+
+            random_formatter_config["doc_to_text"] = invalid_formatter
+        task = ConfigurableTask(config=random_formatter_config)
+        task.set_fewshot_seed(17)
+        task_dict = {task.task_name: task}
+        random.seed(71)
+        random.random()  # Preserve an advanced state, not just a seed.
+        before = random.getstate()
+        if invalid:
+            with pytest.raises(ValueError, match="integrity_random_formatter"):
+                run_task_tests(task_dict=task_dict)
+        else:
+            run_task_tests(task_dict=task_dict)
+        assert random.getstate() == before
+    finally:
+        random.setstate(original_state)
+
+
+def test_random_formatter_evaluation_requests_are_unchanged(random_formatter_config):
+    original_state = random.getstate()
+    try:
+        requests = []
+        for check_integrity in (False, True):
+            model = RecordingLM()
+            evaluator.simple_evaluate(
+                model=model,
+                tasks=[ConfigurableTask(config=random_formatter_config)],
+                task_manager=TaskManager(include_defaults=False),
+                check_integrity=check_integrity,
+                random_seed=71,
+                torch_random_seed=None,
+                limit=1,
+                bootstrap_iters=0,
+                log_samples=False,
+            )
+            requests.append(model.requests)
+        assert len(requests[0]) == 4
+        assert requests[1] == requests[0]
+    finally:
+        random.setstate(original_state)

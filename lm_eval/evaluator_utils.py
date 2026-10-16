@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import random
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -85,6 +86,8 @@ def run_task_tests(
     # The checks must not inherit a caller's -k/-m filters, conftest, or plugins:
     # those can silently omit selected tasks or dispatch live objects to workers.
     with pytest.MonkeyPatch.context() as env, ExitStack() as state:
+        # Built-in task formatters can also consume Python's global random stream.
+        state.callback(random.setstate, random.getstate())
         env.setenv("PYTEST_ADDOPTS", "")
         env.setenv("PYTEST_PLUGINS", "")
         env.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
